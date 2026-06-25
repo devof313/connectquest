@@ -3,7 +3,7 @@ import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
 import api from '../utils/api'
-import { Users, Zap, Link2, BarChart2, Plus, Download } from 'lucide-react'
+import { Users, BarChart2, Plus, Download, Pencil, Trash2, X, Check } from 'lucide-react'
 
 export default function OrganizerDashboard() {
   const { id } = useParams()
@@ -14,6 +14,8 @@ export default function OrganizerDashboard() {
   const [tab, setTab] = useState('overview')
   const [newChallenge, setNewChallenge] = useState({ title: '', description: '', icon: '🎯', points: 10, challenge_type: 'networking', requires_scan: false })
   const [adding, setAdding] = useState(false)
+  const [editingId, setEditingId] = useState(null)
+  const [editForm, setEditForm] = useState({})
 
   useEffect(() => {
     api.get(`/events/${id}`).then(r => setEvent(r.data))
@@ -21,6 +23,24 @@ export default function OrganizerDashboard() {
     api.get(`/events/${id}/participants`).then(r => setParticipants(r.data))
     api.get(`/events/${id}/challenges`).then(r => setChallenges(r.data))
   }, [id])
+
+  const deleteChallenge = async (cid) => {
+    if (!confirm('Delete this challenge?')) return
+    try {
+      await api.delete(`/events/${id}/challenges/${cid}`)
+      setChallenges(p => p.filter(c => c.id !== cid))
+      toast.success('Challenge deleted')
+    } catch { toast.error('Failed to delete') }
+  }
+
+  const saveEdit = async (cid) => {
+    try {
+      const { data } = await api.put(`/events/${id}/challenges/${cid}`, { ...editForm, requires_scan: editForm.requires_scan ? 1 : 0 })
+      setChallenges(p => p.map(c => c.id === cid ? data : c))
+      setEditingId(null)
+      toast.success('Challenge updated')
+    } catch { toast.error('Failed to update') }
+  }
 
   const addChallenge = async (e) => {
     e.preventDefault()
@@ -135,14 +155,46 @@ export default function OrganizerDashboard() {
           <div className="space-y-2">
             <h3 className="font-semibold">All Challenges ({challenges.length})</h3>
             {challenges.map(c => (
-              <div key={c.id} className="card p-3 flex items-center gap-3">
-                <span className="text-xl">{c.icon}</span>
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm truncate">{c.title}</p>
-                  <p className="text-xs text-gray-500 truncate">{c.description}</p>
-                </div>
-                <span className="badge bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 shrink-0">{c.points}pt</span>
-                {c.requires_scan ? <span className="text-xs text-purple-500">📷</span> : null}
+              <div key={c.id} className="card p-3">
+                {editingId === c.id ? (
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input className="input w-16 text-center text-xl px-1" value={editForm.icon} onChange={e => setEditForm(p => ({ ...p, icon: e.target.value }))} />
+                      <input className="input flex-1" value={editForm.title} onChange={e => setEditForm(p => ({ ...p, title: e.target.value }))} />
+                    </div>
+                    <input className="input" placeholder="Description" value={editForm.description} onChange={e => setEditForm(p => ({ ...p, description: e.target.value }))} />
+                    <div className="flex gap-2">
+                      <input type="number" className="input w-24" value={editForm.points} onChange={e => setEditForm(p => ({ ...p, points: +e.target.value }))} />
+                      <select className="input flex-1" value={editForm.challenge_type} onChange={e => setEditForm(p => ({ ...p, challenge_type: e.target.value }))}>
+                        {['networking','teambuilding','learning','fun','special','sponsor'].map(t => <option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    <label className="flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!editForm.requires_scan} onChange={e => setEditForm(p => ({ ...p, requires_scan: e.target.checked }))} />
+                      Requires QR scan
+                    </label>
+                    <div className="flex gap-2">
+                      <button onClick={() => saveEdit(c.id)} className="btn-primary flex items-center gap-1 text-sm py-1.5"><Check size={14} /> Save</button>
+                      <button onClick={() => setEditingId(null)} className="btn-secondary flex items-center gap-1 text-sm py-1.5"><X size={14} /> Cancel</button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-3">
+                    <span className="text-xl shrink-0">{c.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{c.title}</p>
+                      <p className="text-xs text-gray-500 truncate">{c.description}</p>
+                    </div>
+                    <span className="badge bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-300 shrink-0">{c.points}pt</span>
+                    {c.requires_scan ? <span className="text-xs text-purple-500 shrink-0">📷</span> : null}
+                    <button onClick={() => { setEditingId(c.id); setEditForm({ ...c, requires_scan: !!c.requires_scan }) }} className="p-1.5 text-gray-400 hover:text-brand-600 shrink-0">
+                      <Pencil size={15} />
+                    </button>
+                    <button onClick={() => deleteChallenge(c.id)} className="p-1.5 text-gray-400 hover:text-red-500 shrink-0">
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>

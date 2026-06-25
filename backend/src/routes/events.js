@@ -32,6 +32,13 @@ const DEFAULT_CHALLENGES = [
   { title: 'BINGO CENTER', description: 'Special: Connect with the event organizer!', icon: '⭐', points: 50, challenge_type: 'special', requires_scan: 1 },
 ];
 
+// Public: get event info by join code (no auth needed for guest join page)
+router.get('/info/:code', (req, res) => {
+  const event = db.prepare("SELECT id, name, description, event_type, location, theme_color, join_code FROM events WHERE join_code = ? AND status = 'active'").get(req.params.code.toUpperCase());
+  if (!event) return res.status(404).json({ error: 'Event not found' });
+  res.json(event);
+});
+
 // Create event
 router.post('/', auth, requireRole('organizer', 'admin'), async (req, res) => {
   const { name, description, event_type, start_date, end_date, location, max_participants, theme_color } = req.body;
@@ -199,6 +206,21 @@ router.put('/:id', auth, requireRole('organizer', 'admin'), (req, res) => {
   db.prepare('UPDATE events SET name=?, description=?, status=?, theme_color=?, location=?, start_date=?, end_date=? WHERE id=?').run(name, description, status, theme_color, location, start_date, end_date, req.params.id);
   const event = db.prepare('SELECT * FROM events WHERE id = ?').get(req.params.id);
   res.json(event);
+});
+
+// Edit challenge
+router.put('/:id/challenges/:challengeId', auth, requireRole('organizer', 'admin'), (req, res) => {
+  const { title, description, icon, points, challenge_type, requires_scan } = req.body;
+  db.prepare('UPDATE challenges SET title=?, description=?, icon=?, points=?, challenge_type=?, requires_scan=? WHERE id=? AND event_id=?')
+    .run(title, description, icon, points, challenge_type, requires_scan ? 1 : 0, req.params.challengeId, req.params.id);
+  const challenge = db.prepare('SELECT * FROM challenges WHERE id = ?').get(req.params.challengeId);
+  res.json(challenge);
+});
+
+// Delete challenge
+router.delete('/:id/challenges/:challengeId', auth, requireRole('organizer', 'admin'), (req, res) => {
+  db.prepare('DELETE FROM challenges WHERE id = ? AND event_id = ?').run(req.params.challengeId, req.params.id);
+  res.json({ success: true });
 });
 
 // My connections in event

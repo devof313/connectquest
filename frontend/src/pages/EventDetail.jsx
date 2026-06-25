@@ -74,7 +74,7 @@ export default function EventDetail() {
       {/* Quick actions for joined participants */}
       {participation && (
         <div className="grid grid-cols-2 gap-3">
-          <Link to={`/events/${id}/bingo`} className="card p-4 flex flex-col items-center gap-2 hover:border-brand-300 border border-transparent transition-all text-center">
+          <Link to={`/event/${id}`} className="card p-4 flex flex-col items-center gap-2 hover:border-brand-300 border border-transparent transition-all text-center">
             <div className="w-12 h-12 bg-brand-100 dark:bg-brand-900/30 rounded-xl flex items-center justify-center">
               <Grid size={24} className="text-brand-600" />
             </div>

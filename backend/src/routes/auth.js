@@ -41,4 +41,38 @@ router.get('/me', require('../middleware/auth').auth, (req, res) => {
   res.json(user);
 });
 
+// Guest join: name only, no password/email required
+router.post('/guest-join/:code', async (req, res) => {
+  const { name } = req.body;
+  if (!name || !name.trim()) return res.status(400).json({ error: 'Name is required' });
+
+  const event = db.prepare("SELECT * FROM events WHERE join_code = ? AND status = 'active'").get(req.params.code.toUpperCase());
+  if (!event) return res.status(404).json({ error: 'Event not found or not active' });
+
+  // Create a guest user (email derived from name + random suffix, no real password)
+  const guestId = uuidv4();
+  const guestEmail = `guest_${guestId.slice(0, 8)}@connectquest.guest`;
+  const hash = await bcrypt.hash(uuidv4(), 4); // throwaway password
+
+  const QRCode = require('qrcode');
+  const qr = await QRCode.toDataURL(`connectquest://user/${guestId}`);
+
+  db.prepare(`INSERT INTO users (id, email, password, role, name, qr_code) VALUES (?, ?, ?, 'participant', ?, ?)`)
+    .run(guestId, guestEmail, hash, name.trim(), qr);
+
+  // Auto-join the event
+  const challenges = db.prepare('SELECT * FROM challenges WHERE event_id = ?').all(event.id);
+  const shuffled = challenges.sort(() => Math.random() - 0.5).slice(0, 25);
+  const bingoCard = JSON.stringify(shuffled.map(c => c.id));
+  const epId = uuidv4();
+  db.prepare(`INSERT INTO event_participants (id, event_id, user_id, bingo_card, completed_challenges) VALUES (?, ?, ?, ?, '[]')`)
+    .run(epId, event.id, guestId, bingoCard);
+
+  const token = jwt.sign({ id: guestId, email: guestEmail, role: 'participant' }, JWT_SECRET, { expiresIn: '30d' });
+  const participant = db.prepare('SELECT * FROM event_participants WHERE id = ?').get(epId);
+  const user = db.prepare('SELECT id, name, role, points, qr_code FROM users WHERE id = ?').get(guestId);
+
+  res.json({ token, user, event, participant });
+});
+
 module.exports = router;
