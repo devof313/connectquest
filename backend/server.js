@@ -27,7 +27,7 @@ app.get('/api/health', (_, res) => res.json({ status: 'ok', timestamp: new Date(
 // Serve React frontend (production build)
 const FRONTEND_DIST = path.join(__dirname, '..', 'frontend', 'dist');
 app.use(express.static(FRONTEND_DIST));
-app.get('*', (req, res) => {
+app.get('*splat', (req, res) => {
   res.sendFile(path.join(FRONTEND_DIST, 'index.html'));
 });
 
