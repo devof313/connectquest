@@ -46,6 +46,9 @@ export default function App() {
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute roles={['admin']}><AdminDashboard /></PrivateRoute>} />
         </Route>
+
+        {/* Catch-all: never show a blank screen */}
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </>
   )
