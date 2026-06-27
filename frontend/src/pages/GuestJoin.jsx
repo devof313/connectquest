@@ -32,7 +32,9 @@ export default function GuestJoin() {
       const { data } = await api.post(`/auth/guest-join/${code}`, { name: name.trim() })
       // Store token + user in auth store
       api.defaults.headers.common['Authorization'] = `Bearer ${data.token}`
-      useAuthStore.setState({ user: data.user, token: data.token })
+      // Use the store's own updateUser rather than setState directly (safer across browsers)
+      useAuthStore.getState().updateUser(data.user)
+      useAuthStore.setState({ token: data.token })
       // Persist to localStorage via zustand persist
       toast.success(`Welcome, ${data.user.name}! 🎯`)
       navigate(`/event/${data.event.id}`, { replace: true })
