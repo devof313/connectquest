@@ -1,10 +1,10 @@
-import { useEffect, useState, useRef } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef, useCallback } from 'react'
+import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
 import toast from 'react-hot-toast'
 import api from '../utils/api'
 import useAuthStore from '../store/authStore'
-import { X, CheckCircle, Camera, Users, Trophy, Grid3X3 } from 'lucide-react'
+import { X, CheckCircle, Camera, Users, Trophy, Grid3X3, Maximize2, RefreshCw } from 'lucide-react'
 
 const TABS = [
   { key: 'bingo', label: 'Bingo', icon: Grid3X3 },
@@ -28,14 +28,35 @@ export default function ParticipantView() {
   const [scanning, setScanning] = useState(false)
   const [bingoLines, setBingoLines] = useState([])
   const [showMyQR, setShowMyQR] = useState(false)
+  const [isFullscreen, setIsFullscreen] = useState(false)
+  const [lastRefresh, setLastRefresh] = useState(null)
+  const leaderboardRef = useRef(null)
   const scannerRef = useRef(null)
   const scannerDivId = 'qr-scanner-div'
+
+  // Guard against undefined user.id — critical for QR code correctness
+  const myUserId = user?.id || ''
 
   useEffect(() => { loadAll() }, [id])
   useEffect(() => {
     if (tab === 'connections') loadConnections()
-    if (tab === 'leaderboard') loadLeaderboard()
+    if (tab === 'leaderboard') {
+      loadLeaderboard()
+      // Auto-refresh leaderboard every 60 seconds
+      const interval = setInterval(() => {
+        loadLeaderboard()
+        setLastRefresh(new Date())
+      }, 60000)
+      return () => clearInterval(interval)
+    }
   }, [tab])
+
+  // Track fullscreen state changes (e.g. user presses Esc)
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(!!document.fullscreenElement)
+    document.addEventListener('fullscreenchange', onFsChange)
+    return () => document.removeEventListener('fullscreenchange', onFsChange)
+  }, [])
 
   const loadAll = async () => {
     try {
@@ -60,7 +81,15 @@ export default function ParticipantView() {
     api.get(`/events/${id}/my-connections`).then(r => setConnections(r.data)).catch(() => {})
 
   const loadLeaderboard = () =>
-    api.get(`/events/${id}/leaderboard`).then(r => setLeaderboard(r.data)).catch(() => {})
+    api.get(`/events/${id}/leaderboard`).then(r => { setLeaderboard(r.data); setLastRefresh(new Date()) }).catch(() => {})
+
+  const toggleFullscreen = () => {
+    if (!document.fullscreenElement) {
+      leaderboardRef.current?.requestFullscreen().catch(() => {})
+    } else {
+      document.exitFullscreen().catch(() => {})
+    }
+  }
 
   const checkBingo = (completed, grid) => {
     const lines = []
@@ -106,7 +135,10 @@ export default function ParticipantView() {
           const match = text.match(/connectquest:\/\/user\/(.+)/)
           if (match) {
             const scannedUserId = match[1]
-            if (scannedUserId === user?.id) { toast.error("That's your own QR!"); return }
+            if (!scannedUserId || scannedUserId === 'undefined' || scannedUserId === myUserId) {
+              toast.error(scannedUserId === myUserId ? "That's your own QR!" : 'Invalid QR code')
+              return
+            }
             stopScanner()
             await completeChallenge(selectedChallenge, scannedUserId)
           }
@@ -178,7 +210,7 @@ export default function ParticipantView() {
                 className="shrink-0 bg-white/20 hover:bg-white/30 rounded-xl p-2.5 flex flex-col items-center gap-1 transition-colors"
               >
                 <div className="bg-white rounded-lg p-1.5">
-                  <QRCodeSVG value={`connectquest://user/${user?.id}`} size={52} level="M" />
+                  <QRCodeSVG value={`connectquest://user/${myUserId}`} size={52} level="M" />
                 </div>
                 <span className="text-[10px] text-white/70 font-medium">My QR</span>
               </button>
@@ -280,7 +312,29 @@ export default function ParticipantView() {
 
         {/* LEADERBOARD */}
         {tab === 'leaderboard' && (
-          <div className="space-y-2">
+          <div ref={leaderboardRef} className={`space-y-2 ${isFullscreen ? 'bg-gray-50 dark:bg-gray-900 p-6 overflow-y-auto' : ''}`} style={isFullscreen ? { minHeight: '100vh' } : {}}>
+            {/* Toolbar: refresh timestamp + fullscreen toggle */}
+            <div className="flex items-center justify-between mb-1">
+              <span className="text-xs text-gray-400">
+                {lastRefresh ? `Updated ${lastRefresh.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} · auto-refreshes every min` : 'Loading...'}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={loadLeaderboard}
+                  className="p-1.5 text-gray-400 hover:text-brand-500 transition-colors"
+                  title="Refresh now"
+                >
+                  <RefreshCw size={15} />
+                </button>
+                <button
+                  onClick={toggleFullscreen}
+                  className="p-1.5 text-gray-400 hover:text-brand-500 transition-colors"
+                  title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+                >
+                  <Maximize2 size={15} />
+                </button>
+              </div>
+            </div>
             {myRank >= 0 && (
               <div className="bg-brand-50 dark:bg-brand-900/20 border-2 border-brand-300 dark:border-brand-600 rounded-2xl p-3 mb-4">
                 <p className="text-xs text-brand-600 dark:text-brand-400 font-bold mb-0.5">YOUR RANK</p>
@@ -332,7 +386,7 @@ export default function ParticipantView() {
             <p className="text-sm text-gray-500 mb-5">Show this QR to others to connect</p>
             <div className="flex justify-center mb-5">
               <div className="p-4 bg-white rounded-2xl shadow-md">
-                <QRCodeSVG value={`connectquest://user/${user?.id}`} size={200} level="H" />
+                <QRCodeSVG value={`connectquest://user/${myUserId}`} size={200} level="H" />
               </div>
             </div>
             <button onClick={() => setShowMyQR(false)} className="btn-secondary w-full">Close</button>
@@ -386,21 +440,12 @@ export default function ParticipantView() {
                 </div>
 
                 {selectedChallenge.requires_scan ? (
-                  <div className="space-y-3">
-                    <button
-                      onClick={startScanner}
-                      className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base rounded-2xl"
-                    >
-                      <Camera size={20} /> Scan Their QR Code
-                    </button>
-                    <button
-                      onClick={() => completeChallenge(selectedChallenge)}
-                      disabled={completing}
-                      className="btn-secondary w-full py-3"
-                    >
-                      {completing ? 'Completing...' : 'Mark Complete Without Scan'}
-                    </button>
-                  </div>
+                  <button
+                    onClick={startScanner}
+                    className="btn-primary w-full flex items-center justify-center gap-2 py-4 text-base rounded-2xl"
+                  >
+                    <Camera size={20} /> Scan Their QR Code
+                  </button>
                 ) : (
                   <button
                     onClick={() => completeChallenge(selectedChallenge)}
