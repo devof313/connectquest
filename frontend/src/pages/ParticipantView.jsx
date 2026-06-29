@@ -109,7 +109,8 @@ export default function ParticipantView() {
       setParticipation(data.participant)
       const completed = new Set(JSON.parse(data.participant.completed_challenges || '[]'))
       checkBingo(completed, bingoGrid)
-      toast.success(`+${challenge.points} pts! ✅`)
+      const bonusMsg = data.connectionBonus ? ` +${data.connectionBonus} connection bonus!` : ''
+      toast.success(`+${challenge.points} pts!${bonusMsg} ✅`)
       setSelectedChallenge(null)
       stopScanner()
       refreshUser()

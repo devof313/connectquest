@@ -152,15 +152,25 @@ router.post('/:id/complete/:challengeId', auth, (req, res) => {
   db.prepare('UPDATE event_participants SET completed_challenges = ?, points = ? WHERE id = ?').run(JSON.stringify(completed), newPoints, ep.id);
   db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run(challenge.points, req.user.id);
 
-  // Record connection if verified_by exists
+  // Record connection if verified_by exists; award 7 bonus pts for a new connection
+  const CONNECTION_BONUS = 7
+  let connectionBonus = 0
   if (verified_by) {
     try {
-      db.prepare(`INSERT OR IGNORE INTO connections (id, event_id, user1_id, user2_id, challenge_id) VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), req.params.id, req.user.id, verified_by, req.params.challengeId);
+      const existing = db.prepare(`SELECT id FROM connections WHERE event_id = ? AND ((user1_id = ? AND user2_id = ?) OR (user1_id = ? AND user2_id = ?))`).get(req.params.id, req.user.id, verified_by, verified_by, req.user.id)
+      if (!existing) {
+        db.prepare(`INSERT INTO connections (id, event_id, user1_id, user2_id, challenge_id) VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), req.params.id, req.user.id, verified_by, req.params.challengeId)
+        connectionBonus = CONNECTION_BONUS
+        db.prepare('UPDATE event_participants SET points = points + ? WHERE event_id = ? AND user_id = ?').run(connectionBonus, req.params.id, req.user.id)
+        db.prepare('UPDATE users SET points = points + ? WHERE id = ?').run(connectionBonus, req.user.id)
+      } else {
+        db.prepare(`INSERT OR IGNORE INTO connections (id, event_id, user1_id, user2_id, challenge_id) VALUES (?, ?, ?, ?, ?)`).run(uuidv4(), req.params.id, req.user.id, verified_by, req.params.challengeId)
+      }
     } catch {}
   }
 
   const updatedEp = db.prepare('SELECT * FROM event_participants WHERE id = ?').get(ep.id);
-  res.json({ participant: updatedEp, pointsEarned: challenge.points });
+  res.json({ participant: updatedEp, pointsEarned: challenge.points + connectionBonus, connectionBonus });
 });
 
 // Get event connections (participants list)
