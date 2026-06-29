@@ -386,8 +386,8 @@ export default function ParticipantView() {
             <p className="font-bold text-lg mb-1">{user?.name}</p>
             <p className="text-sm text-gray-500 mb-5">Show this QR to others to connect</p>
             <div className="flex justify-center mb-5">
-              <div className="p-4 bg-white rounded-2xl shadow-md">
-                <QRCodeSVG value={`connectquest://user/${myUserId}`} size={200} level="H" bgColor="#ffffff" fgColor="#000000" />
+              <div className="p-4 rounded-2xl shadow-md" style={{ background: '#ffffff', colorScheme: 'light' }}>
+                <QRCodeSVG value={`connectquest://user/${myUserId}`} size={200} level="H" bgColor="#ffffff" fgColor="#000000" style={{ display: 'block' }} />
               </div>
             </div>
             <button onClick={() => setShowMyQR(false)} className="btn-secondary w-full">Close</button>
